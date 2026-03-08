@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Threaded Bank System</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #0d1b3e 0%, #0a0a2e 100%);
+            border-bottom: 2px solid #00d4ff;
+            padding: 18px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { font-size: 22px; color: #00d4ff; letter-spacing: 2px; }
+        .header p { color: #6a6a9a; font-size: 12px; margin-top: 3px; }
+        .header-right { display: flex; gap: 12px; align-items: center; }
+        .live-badge {
+            display: flex; align-items: center; gap: 5px;
+            background: rgba(0,255,136,0.1); border: 1px solid #00ff88;
+            padding: 5px 12px; border-radius: 20px; font-size: 11px; color: #00ff88;
+        }
+        .live-dot { width: 8px; height: 8px; background: #00ff88; border-radius: 50%; animation: pulse 1.5s infinite; display: inline-block; }
+        .tabs {
+            display: flex; background: #0d0d25; border-bottom: 1px solid #1a1a3a;
+            padding: 0 20px; overflow-x: auto;
+        }
+        .tab {
+            padding: 12px 24px; cursor: pointer; color: #6a6a9a; font-size: 13px;
+            font-weight: 600; border-bottom: 2px solid transparent;
+            transition: all 0.2s; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .tab:hover { color: #aaa; }
+        .tab.active { color: #00d4ff; border-bottom-color: #00d4ff; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+        .full { grid-column: 1 / -1; }
+        .card {
+            background: #111128; border: 1px solid #1e1e40; border-radius: 12px;
+            padding: 22px; position: relative; overflow: hidden;
+        }
+        .card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, #00d4ff, transparent); opacity: 0.5;
+        }
+        .card h2 {
+            font-size: 15px; color: #00d4ff; margin-bottom: 14px;
+            padding-bottom: 10px; border-bottom: 1px solid #1e1e40;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .card h2 .badge {
+            margin-left: auto; font-size: 11px; padding: 2px 10px;
+            border-radius: 10px; font-weight: 500;
+        }
+        .stats-bar { display: flex; gap: 15px; flex-wrap: wrap; }
+        .stat-item {
+            flex: 1; min-width: 130px; background: #0d0d25; border: 1px solid #1e1e40;
+            border-radius: 10px; padding: 14px; text-align: center;
+        }
+        .stat-value { font-size: 26px; font-weight: 700; font-family: 'Courier New', monospace; }
+        .stat-value.blue { color: #00d4ff; }
+        .stat-value.green { color: #00ff88; }
+        .stat-value.red { color: #ff5252; }
+        .stat-value.gold { color: #ffd740; }
+        .stat-value.purple { color: #b388ff; }
+        .stat-label { font-size: 10px; color: #6a6a9a; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #1e1e40; }
+        th { background: #0d0d25; color: #00d4ff; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+        tr:hover { background: rgba(0,212,255,0.03); }
+        .balance { font-weight: 700; color: #00ff88; font-family: 'Courier New', monospace; }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 11px; color: #6a6a9a; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        select, input[type="number"], input[type="text"], input[type="email"] {
+            width: 100%; padding: 9px 12px; background: #0d0d25; border: 1px solid #2a2a4a;
+            border-radius: 8px; color: #e0e0e0; font-size: 14px; outline: none; transition: border 0.2s;
+        }
+        select:focus, input:focus { border-color: #00d4ff; box-shadow: 0 0 0 2px rgba(0,212,255,0.1); }
+        .btn {
+            padding: 10px 20px; border: none; border-radius: 8px; font-size: 13px;
+            font-weight: 700; cursor: pointer; transition: all 0.2s;
+            text-transform: uppercase; letter-spacing: 1px; width: 100%;
+        }
+        .btn-green { background: linear-gradient(135deg, #00c853, #00e676); color: #0a0a1a; }
+        .btn-green:hover { box-shadow: 0 0 20px rgba(0,200,83,0.3); }
+        .btn-red { background: linear-gradient(135deg, #ff5252, #ff1744); color: white; }
+        .btn-red:hover { box-shadow: 0 0 20px rgba(255,82,82,0.3); }
+        .btn-blue { background: linear-gradient(135deg, #00b0ff, #2979ff); color: white; }
+        .btn-blue:hover { box-shadow: 0 0 20px rgba(0,176,255,0.3); }
+        .btn-purple { background: linear-gradient(135deg, #7c4dff, #b388ff); color: white; }
+        .btn-purple:hover { box-shadow: 0 0 20px rgba(124,77,255,0.3); }
+        .btn-gold { background: linear-gradient(135deg, #ff8f00, #ffc107); color: #0a0a1a; }
+        .btn-gold:hover { box-shadow: 0 0 20px rgba(255,193,7,0.3); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .result { margin-top: 10px; padding: 10px 12px; border-radius: 8px; font-size: 12px; display: none; animation: fadeIn 0.3s; }
+        .result.success { background: rgba(0,200,83,0.1); border: 1px solid #00c853; color: #00e676; display: block; }
+        .result.error { background: rgba(255,82,82,0.1); border: 1px solid #ff5252; color: #ff5252; display: block; }
+        .result.info { background: rgba(0,176,255,0.1); border: 1px solid #00b0ff; color: #40c4ff; display: block; }
+        .thread-info { font-size: 10px; color: #6a6a9a; margin-top: 3px; }
+        .txn-log { max-height: 350px; overflow-y: auto; }
+        .txn-item { padding: 8px 12px; border-bottom: 1px solid #1e1e40; font-size: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .txn-item:hover { background: rgba(0,212,255,0.03); }
+        .txn-type { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+        .txn-type.DEPOSIT { background: rgba(0,200,83,0.15); color: #00e676; }
+        .txn-type.WITHDRAWAL { background: rgba(255,82,82,0.15); color: #ff5252; }
+        .txn-type.TRANSFER { background: rgba(0,176,255,0.15); color: #40c4ff; }
+        .txn-type.INTEREST { background: rgba(255,215,0,0.15); color: #ffd740; }
+        .txn-amount { font-family: 'Courier New', monospace; font-weight: 700; font-size: 13px; }
+        .txn-status { font-size: 10px; padding: 2px 6px; border-radius: 8px; }
+        .txn-status.SUCCESS { background: rgba(0,200,83,0.1); color: #00e676; }
+        .txn-status.FAILED { background: rgba(255,82,82,0.1); color: #ff5252; }
+        .txn-status.TIMEOUT { background: rgba(255,152,0,0.1); color: #ffab40; }
+        .txn-desc { color: #6a6a9a; font-size: 11px; margin-top: 2px; }
+        .thread-bar { display: flex; height: 30px; border-radius: 6px; overflow: hidden; margin-bottom: 12px; background: #0d0d25; }
+        .thread-bar-seg { display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #0a0a1a; transition: width 0.5s ease; }
+        .thread-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; max-height: 300px; overflow-y: auto; }
+        .thread-pill { padding: 6px 10px; border-radius: 6px; font-size: 11px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #1e1e40; }
+        .thread-pill .state { font-size: 9px; padding: 2px 6px; border-radius: 8px; font-weight: 700; }
+        .state-RUNNABLE { background: rgba(0,200,83,0.2); color: #00e676; }
+        .state-WAITING { background: rgba(0,176,255,0.2); color: #40c4ff; }
+        .state-TIMED_WAITING { background: rgba(255,215,0,0.2); color: #ffd740; }
+        .state-BLOCKED { background: rgba(255,82,82,0.2); color: #ff5252; }
+        .race-result-box { padding: 16px; border-radius: 10px; text-align: center; margin-top: 12px; }
+        .race-result-box.correct { background: rgba(0,200,83,0.08); border: 1px solid #00c853; }
+        .race-result-box.wrong { background: rgba(255,82,82,0.08); border: 1px solid #ff5252; }
+        .race-big { font-size: 36px; font-weight: 800; font-family: 'Courier New', monospace; }
+        .progress-bar { height: 8px; border-radius: 4px; background: #0d0d25; overflow: hidden; margin-top: 6px; }
+        .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+        @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(-4px);} to{opacity:1;transform:translateY(0);} }
+        @keyframes slideIn { from{opacity:0;transform:translateX(-10px);} to{opacity:1;transform:translateX(0);} }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: #111128; }
+        ::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }
+
+        /* ===== TABLET ===== */
+        @media (max-width: 900px) {
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+            .header { flex-direction: column; gap: 10px; text-align: center; padding: 14px 20px; }
+            .transfer-form { grid-template-columns: 1fr 1fr !important; }
+            .transfer-form .btn { grid-column: 1 / -1; }
+        }
+
+        /* ===== MOBILE ===== */
+        @media (max-width: 600px) {
+            body { font-size: 14px; -webkit-text-size-adjust: 100%; }
+            .header { padding: 12px 14px; gap: 8px; }
+            .header h1 { font-size: 16px; letter-spacing: 1px; }
+            .header p { font-size: 10px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+            .header-right { justify-content: center; }
+            .tabs { padding: 0 6px; gap: 0; -webkit-overflow-scrolling: touch; }
+            .tab { padding: 10px 12px; font-size: 11px; letter-spacing: 0; }
+            .container { padding: 12px 10px; }
+            .grid-2, .grid-3 { grid-template-columns: 1fr; gap: 14px; }
+            .card { padding: 16px 14px; border-radius: 10px; }
+            .card h2 { font-size: 13px; flex-wrap: wrap; gap: 4px; }
+            .card h2 .badge { font-size: 9px; padding: 2px 7px; margin-left: 0; }
+            .stats-bar { gap: 8px; }
+            .stat-item { min-width: 0; flex-basis: calc(50% - 4px); padding: 10px 6px; border-radius: 8px; }
+            .stat-value { font-size: 20px; }
+            .stat-label { font-size: 9px; letter-spacing: 0.5px; }
+            /* Table: stacked cards on mobile */
+            table, thead, tbody, th, td, tr { display: block; }
+            thead { position: absolute; top: -9999px; left: -9999px; }
+            tr { margin-bottom: 10px; border: 1px solid #1e1e40; border-radius: 8px; padding: 10px 12px; background: #0d0d25; }
+            td { padding: 4px 0; border: none; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+            td::before { font-weight: 700; color: #00d4ff; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+            td:nth-child(1)::before { content: "ID"; }
+            td:nth-child(2)::before { content: "Customer"; }
+            td:nth-child(3)::before { content: "Email"; }
+            td:nth-child(4)::before { content: "Balance"; }
+            /* Forms: larger touch targets */
+            select, input[type="number"], input[type="text"], input[type="email"] {
+                padding: 12px 14px; font-size: 16px; border-radius: 10px;
+            }
+            .btn { padding: 14px 20px; font-size: 14px; border-radius: 10px; }
+            .form-group { margin-bottom: 14px; }
+            label { font-size: 11px; margin-bottom: 5px; }
+            /* Transfer form: stack vertically */
+            .transfer-form { grid-template-columns: 1fr !important; gap: 10px !important; }
+            .transfer-form .btn { height: auto !important; }
+            /* Transaction items */
+            .txn-item { flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px; }
+            .txn-item > div:last-child { text-align: left; width: 100%; display: flex; justify-content: space-between; align-items: center; }
+            .txn-amount { font-size: 14px; }
+            .txn-desc { font-size: 10px; }
+            .txn-log { max-height: 280px; }
+            /* Thread grid */
+            .thread-grid { grid-template-columns: 1fr; max-height: 250px; }
+            .thread-pill { font-size: 10px; padding: 6px 8px; }
+            .thread-bar { height: 24px; }
+            .thread-bar-seg { font-size: 9px; }
+            /* Thread legend */
+            .thread-legend { flex-wrap: wrap; gap: 8px !important; }
+            /* Race condition */
+            .race-big { font-size: 26px; }
+            .race-result-box { padding: 12px; }
+            /* Progress bars */
+            .progress-bar { height: 10px; }
+            /* Results */
+            .result { font-size: 11px; padding: 10px; }
+            /* Deadlock status */
+            #deadlockStatus { font-size: 13px; padding: 10px; }
+            /* Stress test info */
+            .stress-info div { font-size: 12px !important; }
+        }
+
+        /* ===== VERY SMALL (320px) ===== */
+        @media (max-width: 380px) {
+            .header h1 { font-size: 14px; }
+            .tab { padding: 8px 8px; font-size: 10px; }
+            .stat-item { flex-basis: 100%; }
+            .stat-value { font-size: 18px; }
+            .container { padding: 8px 6px; }
+            .card { padding: 12px 10px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div>
+        <h1>&#9961; MULTI-THREADED BANK SYSTEM</h1>
+        <p>Java Concurrency &#8226; ReadWriteLock &#8226; BlockingQueue &#8226; ExecutorService &#8226; Deadlock Prevention</p>
+    </div>
+    <div class="header-right">
+        <div class="live-badge"><span class="live-dot"></span> LIVE</div>
+        <div style="font-size:11px;color:#6a6a9a;" id="clock"></div>
+    </div>
+</div>
+
+<div class="tabs">
+    <div class="tab active" onclick="showTab('banking', this)">&#128179; Banking</div>
+    <div class="tab" onclick="showTab('threads', this)">&#9881; Thread Monitor</div>
+    <div class="tab" onclick="showTab('stress', this)">&#9889; Stress Test</div>
+    <div class="tab" onclick="showTab('race', this)">&#128165; Race Condition</div>
+    <div class="tab" onclick="showTab('analytics', this)">&#128200; Analytics</div>
+</div>
+
+<!-- TAB: BANKING -->
+<div class="tab-panel active" id="panel-banking">
+<div class="container">
+    <div class="stats-bar">
+        <div class="stat-item"><div class="stat-value blue" id="statAccounts">0</div><div class="stat-label">Accounts</div></div>
+        <div class="stat-item"><div class="stat-value green" id="statTotalBalance">$0</div><div class="stat-label">Total Balance</div></div>
+        <div class="stat-item"><div class="stat-value gold" id="statTransactions">0</div><div class="stat-label">Transactions</div></div>
+        <div class="stat-item"><div class="stat-value purple" id="statSuccess">0%</div><div class="stat-label">Success Rate</div></div>
+    </div>
+
+    <div style="margin-top:20px;">
+        <div class="card">
+            <h2>&#128179; Account Balances <span class="badge" style="background:rgba(0,255,136,0.1);color:#00ff88;"><span class="live-dot"></span> Live</span></h2>
+            <table>
+                <thead><tr><th>ID</th><th>Customer</th><th>Email</th><th>Balance</th></tr></thead>
+                <tbody id="accountsTable"><tr><td colspan="4" style="text-align:center;color:#6a6a9a;">Loading...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="grid-3" style="margin-top:20px;">
+        <div class="card">
+            <h2>&#128178; Deposit</h2>
+            <form onsubmit="return handleDeposit(event)">
+                <div class="form-group"><label>Account</label><select id="depositAccount" required></select></div>
+                <div class="form-group"><label>Amount ($)</label><input type="number" id="depositAmount" min="0.01" step="0.01" placeholder="0.00" required></div>
+                <button type="submit" class="btn btn-green">Deposit</button>
+                <div class="result" id="depositResult"></div>
+            </form>
+        </div>
+        <div class="card">
+            <h2>&#128184; Withdraw</h2>
+            <form onsubmit="return handleWithdraw(event)">
+                <div class="form-group"><label>Account</label><select id="withdrawAccount" required></select></div>
+                <div class="form-group"><label>Amount ($)</label><input type="number" id="withdrawAmount" min="0.01" step="0.01" placeholder="0.00" required></div>
+                <button type="submit" class="btn btn-red">Withdraw</button>
+                <div class="result" id="withdrawResult"></div>
+            </form>
+        </div>
+        <div class="card">
+            <h2>&#10010; New Account</h2>
+            <form onsubmit="return handleCreateAccount(event)">
+                <div class="form-group"><label>Name</label><input type="text" id="newName" placeholder="John Doe" required maxlength="100"></div>
+                <div class="form-group"><label>Email</label><input type="email" id="newEmail" placeholder="john@bank.com" required maxlength="200"></div>
+                <div class="form-group"><label>Initial Balance ($)</label><input type="number" id="newBalance" min="0" step="0.01" value="1000" required></div>
+                <button type="submit" class="btn btn-purple">Create Account</button>
+                <div class="result" id="createResult"></div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+        <h2>&#128260; Transfer <span class="badge" style="background:rgba(0,176,255,0.1);color:#40c4ff;">Deadlock-Safe Lock Ordering</span></h2>
+        <form onsubmit="return handleTransfer(event)" class="transfer-form" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:14px;align-items:end;">
+            <div class="form-group"><label>From</label><select id="transferFrom" required></select></div>
+            <div class="form-group"><label>To</label><select id="transferTo" required></select></div>
+            <div class="form-group"><label>Amount ($)</label><input type="number" id="transferAmount" min="0.01" step="0.01" placeholder="0.00" required></div>
+            <button type="submit" class="btn btn-blue" style="height:40px;">Transfer</button>
+        </form>
+        <div class="result" id="transferResult"></div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+        <h2>&#128220; Transaction Log <span class="badge" style="background:rgba(255,215,0,0.1);color:#ffd740;">BlockingQueue Consumer</span></h2>
+        <div class="txn-log" id="txnLog"><div style="text-align:center;color:#6a6a9a;padding:20px;">No transactions yet.</div></div>
+    </div>
+</div>
+</div>
+
+<!-- TAB: THREAD MONITOR -->
+<div class="tab-panel" id="panel-threads">
+<div class="container">
+    <div class="stats-bar">
+        <div class="stat-item"><div class="stat-value blue" id="threadTotal">0</div><div class="stat-label">Total Threads</div></div>
+        <div class="stat-item"><div class="stat-value green" id="threadRunnable">0</div><div class="stat-label">Runnable</div></div>
+        <div class="stat-item"><div class="stat-value gold" id="threadWaiting">0</div><div class="stat-label">Waiting</div></div>
+        <div class="stat-item"><div class="stat-value red" id="threadBlocked">0</div><div class="stat-label">Blocked</div></div>
+        <div class="stat-item"><div class="stat-value purple" id="threadPeak">0</div><div class="stat-label">Peak Threads</div></div>
+    </div>
+    <div class="card" style="margin-top:20px;">
+        <h2>&#9881; Thread State Distribution</h2>
+        <div class="thread-bar" id="threadBar"></div>
+        <div class="thread-legend" style="display:flex;gap:16px;font-size:11px;color:#6a6a9a;">
+            <span><span style="display:inline-block;width:10px;height:10px;background:#00e676;border-radius:2px;margin-right:4px;"></span>Runnable</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#ffd740;border-radius:2px;margin-right:4px;"></span>Timed Waiting</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#40c4ff;border-radius:2px;margin-right:4px;"></span>Waiting</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#ff5252;border-radius:2px;margin-right:4px;"></span>Blocked</span>
+        </div>
+    </div>
+    <div class="card" style="margin-top:20px;">
+        <h2>&#128269; Live Thread List <span class="badge" style="background:rgba(0,212,255,0.1);color:#00d4ff;"><span class="live-dot"></span> 1s refresh</span></h2>
+        <div class="thread-grid" id="threadGrid"></div>
+    </div>
+    <div class="card" style="margin-top:20px;">
+        <h2>&#128274; Deadlock Status</h2>
+        <div id="deadlockStatus" style="padding:14px;text-align:center;font-size:15px;font-weight:700;color:#00e676;background:rgba(0,200,83,0.06);border-radius:8px;">
+            No Deadlocks Detected &#10003;
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- TAB: STRESS TEST -->
+<div class="tab-panel" id="panel-stress">
+<div class="container">
+    <div class="grid-2">
+        <div class="card">
+            <h2>&#9889; Launch Stress Test</h2>
+            <p style="color:#6a6a9a;font-size:12px;margin-bottom:16px;">
+                Spawns concurrent worker threads that perform random deposits, withdrawals, and transfers simultaneously.
+                Watch the Thread Monitor and Transaction Log update in real-time!
+            </p>
+            <form onsubmit="return handleStressTest(event)">
+                <div class="form-group"><label>Worker Threads (1-20)</label><input type="number" id="stressWorkers" min="1" max="20" value="5" required></div>
+                <div class="form-group"><label>Transactions Per Worker (1-50)</label><input type="number" id="stressTxn" min="1" max="50" value="10" required></div>
+                <button type="submit" class="btn btn-gold" id="stressBtn">&#9889; Launch Stress Test</button>
+                <div class="result" id="stressResult"></div>
+            </form>
+        </div>
+        <div class="card">
+            <h2>&#128161; What This Demonstrates</h2>
+            <div class="stress-info" style="font-size:13px;color:#aaa;line-height:2;">
+                <div><span style="color:#00d4ff;font-weight:700;">ExecutorService</span> &#8212; Thread pool manages worker lifecycle</div>
+                <div><span style="color:#00e676;font-weight:700;">CountDownLatch</span> &#8212; Tracks when all workers complete</div>
+                <div><span style="color:#ffd740;font-weight:700;">ReadWriteLock</span> &#8212; Safe concurrent balance reads/writes</div>
+                <div><span style="color:#ff5252;font-weight:700;">Lock Ordering</span> &#8212; Prevents deadlocks in transfers</div>
+                <div><span style="color:#b388ff;font-weight:700;">BlockingQueue</span> &#8212; Logs transactions without blocking workers</div>
+                <div><span style="color:#40c4ff;font-weight:700;">Future.get(timeout)</span> &#8212; Transfers timeout if stuck</div>
+                <div><span style="color:#ff80ab;font-weight:700;">ConcurrentHashMap</span> &#8212; Thread-safe account registry</div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- TAB: RACE CONDITION -->
+<div class="tab-panel" id="panel-race">
+<div class="container">
+    <div class="card">
+        <h2>&#128165; Race Condition Demonstration</h2>
+        <p style="color:#6a6a9a;font-size:13px;margin-bottom:8px;">
+            Multiple threads increment a counter simultaneously. Compare <strong style="color:#00e676;">AtomicInteger (thread-safe)</strong>
+            vs <strong style="color:#ff5252;">Plain int (unsafe)</strong> to see how race conditions cause data loss.
+        </p>
+    </div>
+    <div class="grid-2" style="margin-top:20px;">
+        <div class="card">
+            <h2 style="color:#00e676;">&#128274; Safe Mode (AtomicInteger)</h2>
+            <form onsubmit="return runRaceDemo(event, 'safe')">
+                <div class="form-group"><label>Threads</label><input type="number" id="safeThreads" min="2" max="50" value="10"></div>
+                <div class="form-group"><label>Increments per Thread</label><input type="number" id="safeIncrements" min="100" max="10000" value="1000"></div>
+                <button type="submit" class="btn btn-green">Run Safe Demo</button>
+            </form>
+            <div id="safeResult"></div>
+        </div>
+        <div class="card">
+            <h2 style="color:#ff5252;">&#128275; Unsafe Mode (Plain int)</h2>
+            <form onsubmit="return runRaceDemo(event, 'unsafe')">
+                <div class="form-group"><label>Threads</label><input type="number" id="unsafeThreads" min="2" max="50" value="10"></div>
+                <div class="form-group"><label>Increments per Thread</label><input type="number" id="unsafeIncrements" min="100" max="10000" value="1000"></div>
+                <button type="submit" class="btn btn-red">Run Unsafe Demo</button>
+            </form>
+            <div id="unsafeResult"></div>
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- TAB: ANALYTICS -->
+<div class="tab-panel" id="panel-analytics">
+<div class="container">
+    <div class="stats-bar">
+        <div class="stat-item"><div class="stat-value green" id="anDeposits">0</div><div class="stat-label">Deposits</div></div>
+        <div class="stat-item"><div class="stat-value red" id="anWithdrawals">0</div><div class="stat-label">Withdrawals</div></div>
+        <div class="stat-item"><div class="stat-value blue" id="anTransfers">0</div><div class="stat-label">Transfers</div></div>
+        <div class="stat-item"><div class="stat-value gold" id="anInterest">0</div><div class="stat-label">Interest</div></div>
+        <div class="stat-item"><div class="stat-value purple" id="anThroughput">0</div><div class="stat-label">Ops/sec</div></div>
+    </div>
+    <div class="grid-2" style="margin-top:20px;">
+        <div class="card">
+            <h2>&#128200; Transaction Breakdown</h2>
+            <div id="breakdownBars"></div>
+        </div>
+        <div class="card">
+            <h2>&#128176; Money Flow</h2>
+            <div id="moneyFlow"></div>
+        </div>
+    </div>
+    <div class="grid-2" style="margin-top:20px;">
+        <div class="card">
+            <h2>&#9989; Success / Failure Ratio</h2>
+            <div id="successBars"></div>
+        </div>
+        <div class="card">
+            <h2>&#128202; System Performance</h2>
+            <div id="perfStats"></div>
+        </div>
+    </div>
+</div>
+</div>
+
+<script>
+function showTab(name, el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + name).classList.add('active');
+    el.classList.add('active');
+}
+setInterval(() => { document.getElementById('clock').textContent = new Date().toLocaleTimeString(); }, 1000);
+
+let accounts = [];
+
+async function fetchAccounts() {
+    try {
+        const res = await fetch('/api/accounts');
+        accounts = await res.json();
+        const tbody = document.getElementById('accountsTable');
+        tbody.innerHTML = accounts.length === 0
+            ? '<tr><td colspan="4" style="text-align:center;color:#6a6a9a;">No accounts</td></tr>'
+            : accounts.map(a => '<tr><td><strong style="color:#00d4ff;">'+a.id+'</strong></td><td>'+a.customer+'</td><td style="color:#6a6a9a;">'+a.email+'</td><td class="balance">$'+a.balance.toLocaleString('en-US',{minimumFractionDigits:2})+'</td></tr>').join('');
+        ['depositAccount','withdrawAccount','transferFrom','transferTo'].forEach(id => {
+            const sel = document.getElementById(id);
+            const cur = sel.value;
+            sel.innerHTML = accounts.map(a => '<option value="'+a.id+'">'+a.id+' - '+a.customer+' ($'+a.balance.toFixed(2)+')</option>').join('');
+            if (cur) sel.value = cur;
+        });
+    } catch(e) {}
+}
+
+async function fetchTransactions() {
+    try {
+        const res = await fetch('/api/transactions');
+        const txns = await res.json();
+        document.getElementById('statTransactions').textContent = txns.length;
+        const succ = txns.filter(t => t.status === 'SUCCESS').length;
+        document.getElementById('statSuccess').textContent = txns.length > 0 ? Math.round(succ/txns.length*100)+'%' : '0%';
+        const log = document.getElementById('txnLog');
+        if (!txns.length) { log.innerHTML = '<div style="text-align:center;color:#6a6a9a;padding:20px;">No transactions yet.</div>'; return; }
+        log.innerHTML = txns.slice(0,30).map(t => '<div class="txn-item"><div><span class="txn-type '+t.type+'">'+t.type+'</span> <span class="txn-status '+t.status+'">'+t.status+'</span> <span style="margin-left:8px;color:#aaa;">'+(t.type==='TRANSFER'?'#'+t.from+' &#8594; #'+t.to:'#'+t.from)+'</span><div class="txn-desc">'+t.description+'</div></div><div style="text-align:right;"><div class="txn-amount" style="color:'+(t.type==='DEPOSIT'||t.type==='INTEREST'?'#00e676':t.type==='WITHDRAWAL'?'#ff5252':'#40c4ff')+'">'+(t.type==='WITHDRAWAL'?'-':'+')+' $'+t.amount.toFixed(2)+'</div><div style="font-size:10px;color:#6a6a9a;">'+t.time.replace('T',' ')+'</div></div></div>').join('');
+    } catch(e) {}
+}
+
+async function fetchAnalytics() {
+    try {
+        const res = await fetch('/api/analytics');
+        const d = await res.json();
+        document.getElementById('statAccounts').textContent = d.accounts;
+        document.getElementById('statTotalBalance').textContent = '$' + d.totalBalance.toLocaleString('en-US',{minimumFractionDigits:2});
+        document.getElementById('anDeposits').textContent = d.deposits;
+        document.getElementById('anWithdrawals').textContent = d.withdrawals;
+        document.getElementById('anTransfers').textContent = d.transfers;
+        document.getElementById('anInterest').textContent = d.interest;
+        document.getElementById('anThroughput').textContent = d.throughput.toFixed(0);
+
+        const total = d.deposits + d.withdrawals + d.transfers + d.interest || 1;
+        document.getElementById('breakdownBars').innerHTML = [
+            {l:'Deposits',v:d.deposits,c:'#00e676'},{l:'Withdrawals',v:d.withdrawals,c:'#ff5252'},
+            {l:'Transfers',v:d.transfers,c:'#40c4ff'},{l:'Interest',v:d.interest,c:'#ffd740'}
+        ].map(b => '<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;"><span style="color:'+b.c+'">'+b.l+'</span><span style="color:#6a6a9a">'+b.v+' ('+Math.round(b.v/total*100)+'%)</span></div><div class="progress-bar"><div class="progress-fill" style="width:'+b.v/total*100+'%;background:'+b.c+';"></div></div></div>').join('');
+
+        document.getElementById('moneyFlow').innerHTML =
+            '<div style="margin-bottom:14px;"><div style="font-size:12px;color:#6a6a9a;">Total Deposited</div><div style="font-size:22px;font-weight:700;color:#00e676;font-family:monospace;">+$'+d.totalDeposited.toLocaleString('en-US',{minimumFractionDigits:2})+'</div></div>'+
+            '<div style="margin-bottom:14px;"><div style="font-size:12px;color:#6a6a9a;">Total Withdrawn</div><div style="font-size:22px;font-weight:700;color:#ff5252;font-family:monospace;">-$'+d.totalWithdrawn.toLocaleString('en-US',{minimumFractionDigits:2})+'</div></div>'+
+            '<div><div style="font-size:12px;color:#6a6a9a;">Total Transferred</div><div style="font-size:22px;font-weight:700;color:#40c4ff;font-family:monospace;">&#8596; $'+d.totalTransferred.toLocaleString('en-US',{minimumFractionDigits:2})+'</div></div>';
+
+        const st = d.success + d.failed + d.timeout || 1;
+        document.getElementById('successBars').innerHTML = [
+            {l:'Success',v:d.success,c:'#00e676'},{l:'Failed',v:d.failed,c:'#ff5252'},{l:'Timeout',v:d.timeout,c:'#ffab40'}
+        ].map(b => '<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;"><span style="color:'+b.c+'">'+b.l+'</span><span style="color:#6a6a9a">'+b.v+'</span></div><div class="progress-bar"><div class="progress-fill" style="width:'+b.v/st*100+'%;background:'+b.c+';"></div></div></div>').join('');
+
+        document.getElementById('perfStats').innerHTML =
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+
+            [{v:d.peakThreads,l:'Peak Threads',c:'#00d4ff'},{v:d.stressTestsRunning,l:'Active Workers',c:'#b388ff'},{v:d.throughput.toFixed(0),l:'Ops / Second',c:'#ffd740'},{v:d.totalTransactions,l:'Total Txns',c:'#00e676'}]
+            .map(s => '<div style="background:#0d0d25;padding:12px;border-radius:8px;text-align:center;"><div style="font-size:22px;font-weight:700;color:'+s.c+';font-family:monospace;">'+s.v+'</div><div style="font-size:10px;color:#6a6a9a;text-transform:uppercase;">'+s.l+'</div></div>').join('')+
+            '</div>';
+    } catch(e) {}
+}
+
+async function fetchThreads() {
+    try {
+        const res = await fetch('/api/threads');
+        const d = await res.json();
+        document.getElementById('threadTotal').textContent = d.total;
+        document.getElementById('threadPeak').textContent = d.peakThreads;
+        document.getElementById('threadRunnable').textContent = d.states.RUNNABLE || 0;
+        document.getElementById('threadWaiting').textContent = (d.states.WAITING||0) + (d.states.TIMED_WAITING||0);
+        document.getElementById('threadBlocked').textContent = d.states.BLOCKED || 0;
+        const colors = {RUNNABLE:'#00e676',TIMED_WAITING:'#ffd740',WAITING:'#40c4ff',BLOCKED:'#ff5252',NEW:'#b388ff',TERMINATED:'#666'};
+        document.getElementById('threadBar').innerHTML = Object.entries(d.states).map(function(e){return '<div class="thread-bar-seg" style="width:'+e[1]/d.total*100+'%;background:'+(colors[e[0]]||'#666')+';">'+e[1]+'</div>';}).join('');
+        document.getElementById('threadGrid').innerHTML = d.threads.map(function(t){return '<div class="thread-pill" style="background:#0d0d25;"><span style="font-size:11px;">'+t.name+'</span><span class="state state-'+t.state+'">'+t.state+'</span></div>';}).join('');
+        var dc = document.getElementById('deadlockStatus');
+        if (d.deadlocked) { dc.style.color='#ff5252'; dc.style.background='rgba(255,82,82,0.06)'; dc.innerHTML='&#9888; DEADLOCK DETECTED!'; }
+        else { dc.style.color='#00e676'; dc.style.background='rgba(0,200,83,0.06)'; dc.innerHTML='No Deadlocks Detected &#10003;'; }
+    } catch(e) {}
+}
+
+async function postForm(url, body) {
+    const res = await fetch(url, {method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body});
+    return await res.json();
+}
+
+function showResult(id, data) {
+    var el = document.getElementById(id);
+    el.className = 'result ' + (data.success ? 'success' : 'error');
+    el.innerHTML = data.message + (data.thread ? '<div class="thread-info">Thread: '+data.thread+'</div>' : '');
+    refresh();
+}
+
+async function handleDeposit(e) {
+    e.preventDefault();
+    var data = await postForm('/api/deposit','accountId='+document.getElementById('depositAccount').value+'&amount='+document.getElementById('depositAmount').value);
+    showResult('depositResult',data); document.getElementById('depositAmount').value=''; return false;
+}
+async function handleWithdraw(e) {
+    e.preventDefault();
+    var data = await postForm('/api/withdraw','accountId='+document.getElementById('withdrawAccount').value+'&amount='+document.getElementById('withdrawAmount').value);
+    showResult('withdrawResult',data); document.getElementById('withdrawAmount').value=''; return false;
+}
+async function handleTransfer(e) {
+    e.preventDefault();
+    var f=document.getElementById('transferFrom').value, t=document.getElementById('transferTo').value;
+    if(f===t){var el=document.getElementById('transferResult');el.className='result error';el.textContent='Cannot transfer to same account';return false;}
+    var data = await postForm('/api/transfer','fromAccountId='+f+'&toAccountId='+t+'&amount='+document.getElementById('transferAmount').value);
+    showResult('transferResult',data); document.getElementById('transferAmount').value=''; return false;
+}
+async function handleCreateAccount(e) {
+    e.preventDefault();
+    var data = await postForm('/api/createaccount','name='+encodeURIComponent(document.getElementById('newName').value)+'&email='+encodeURIComponent(document.getElementById('newEmail').value)+'&balance='+document.getElementById('newBalance').value);
+    showResult('createResult',data);
+    if(data.success){document.getElementById('newName').value='';document.getElementById('newEmail').value='';}
+    return false;
+}
+async function handleStressTest(e) {
+    e.preventDefault();
+    var btn=document.getElementById('stressBtn'); btn.disabled=true; btn.textContent='Running...';
+    var data = await postForm('/api/stresstest','workers='+document.getElementById('stressWorkers').value+'&txnPerWorker='+document.getElementById('stressTxn').value);
+    var el=document.getElementById('stressResult');
+    el.className='result '+(data.success?'info':'error');
+    el.innerHTML=data.message+(data.thread?'<div class="thread-info">Launched from: '+data.thread+'</div>':'');
+    setTimeout(function(){btn.disabled=false;btn.innerHTML='&#9889; Launch Stress Test';},3000);
+    return false;
+}
+async function runRaceDemo(e, mode) {
+    e.preventDefault();
+    var threads=document.getElementById(mode+'Threads').value, inc=document.getElementById(mode+'Increments').value;
+    var data = await postForm('/api/racedemo','mode='+mode+'&threads='+threads+'&increments='+inc);
+    var el=document.getElementById(mode+'Result');
+    var ok=data.correct;
+    el.innerHTML = '<div class="race-result-box '+(ok?'correct':'wrong')+'">'+
+        '<div class="race-big" style="color:'+(ok?'#00e676':'#ff5252')+';">'+data.actual.toLocaleString()+'</div>'+
+        '<div style="font-size:10px;color:#6a6a9a;text-transform:uppercase;margin-top:4px;">Actual Count</div>'+
+        '<div style="margin-top:10px;font-size:14px;color:#aaa;">Expected: <strong>'+data.expected.toLocaleString()+'</strong></div>'+
+        (data.lost!==undefined?'<div style="margin-top:4px;font-size:14px;color:#ff5252;font-weight:700;">Lost updates: '+data.lost.toLocaleString()+'</div>':'')+
+        '<div style="margin-top:8px;font-size:11px;color:#6a6a9a;">'+data.mechanism+' &#8226; '+data.threads+' threads &#8226; '+data.timeMs+'ms</div>'+
+        '<div style="margin-top:8px;font-size:13px;font-weight:700;color:'+(ok?'#00e676':'#ff5252')+';">'+(ok?'&#10003; THREAD-SAFE: All increments counted':'&#10007; RACE CONDITION: Data lost due to concurrency!')+'</div></div>';
+    return false;
+}
+
+function refresh() { fetchAccounts(); fetchTransactions(); fetchAnalytics(); }
+refresh(); fetchThreads();
+setInterval(refresh, 2000);
+setInterval(fetchThreads, 1000);
+</script>
+</body>
+</html>
