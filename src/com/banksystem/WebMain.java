@@ -62,7 +62,8 @@ public class WebMain {
         System.out.println("[✓] Interest service scheduled (2% every 30s)");
 
         // 6. Start Web Server
-        int port = 9090;
+        String envPort = System.getenv("PORT");
+        int port = (envPort != null) ? Integer.parseInt(envPort) : 8080;
         BankWebServer webServer = new BankWebServer(bankService, transferService, logger, port);
         webServer.start();
         System.out.println("[✓] Web server started on http://localhost:" + port);
